@@ -69,11 +69,9 @@ public class TicTacToe extends Application {
             buttons[row][col].setText(isXTurn ? "X" : "O");
             if (checkWin()) {
                 showWinMessage(isXTurn ? "X" : "O");
-                // поток блокирется, пока не нажмем ОК
                 resetBoard();
             } else if (checkDraw()) {
                 showDrawMessage();
-                // поток блокирется, пока не нажмем ОК
                 resetBoard();
             } else {
                 isXTurn = !isXTurn;
