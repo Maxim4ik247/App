@@ -9,10 +9,15 @@ import javafx.scene.control.Alert;
 import javafx.geometry.Pos;
 import javafx.geometry.Insets;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
 
 public class TicTacToe extends Application {
     private final Button[][] buttons = new Button[3][3];
-    private boolean isXTurn = true;
+    private boolean isXTurn = true;               // true → ход X (игрок), false → ход O (компьютер)
+    private final Random random = new Random();
 
     @Override
     public void start(Stage primaryStage) {
@@ -22,7 +27,6 @@ public class TicTacToe extends Application {
         grid.setHgap(5);
         grid.setVgap(5);
 
-        // Создаем кнопки 3x3
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 3; col++) {
                 Button button = new Button();
@@ -32,77 +36,170 @@ public class TicTacToe extends Application {
 
                 final int r = row;
                 final int c = col;
-                button.setOnAction(e -> handleButtonClick(r, c));
+                button.setOnAction(e -> handlePlayerMove(r, c));
 
                 grid.add(button, col, row);
             }
         }
 
-        GridPane secondGrid = new GridPane();
-        secondGrid.setAlignment(Pos.BOTTOM_CENTER);
-        secondGrid.setHgap(5);
-        secondGrid.setVgap(5);
+        GridPane controlBar = new GridPane();
+        controlBar.setAlignment(Pos.BOTTOM_CENTER);
+        controlBar.setHgap(5);
+        controlBar.setVgap(5);
+
         Button exitButton = new Button("Exit");
         exitButton.setOnAction(e -> System.exit(0));
+
         Button restartButton = new Button("Restart");
         restartButton.setOnAction(e -> resetBoard());
-        secondGrid.add(exitButton, 0, 0);
-        secondGrid.add(restartButton, 1, 0);
-        secondGrid.setPadding(new Insets(10));
 
-        GridPane mainGrid = new GridPane();
-        mainGrid.setAlignment(Pos.CENTER);
-        mainGrid.setHgap(5);
-        mainGrid.setVgap(5);
-        mainGrid.setPadding(new Insets(10));
-        mainGrid.add(grid, 0, 0);
-        mainGrid.add(secondGrid, 0, 1);
+        controlBar.add(exitButton, 0, 0);
+        controlBar.add(restartButton, 1, 0);
+        controlBar.setPadding(new Insets(10));
 
-        Scene scene = new Scene(mainGrid, 450, 450);
-        primaryStage.setTitle("Крестики-Нолики");
+        GridPane root = new GridPane();
+        root.setAlignment(Pos.CENTER);
+        root.setHgap(5);
+        root.setVgap(5);
+        root.setPadding(new Insets(10));
+        root.add(grid, 0, 0);
+        root.add(controlBar, 0, 1);
+
+        Scene scene = new Scene(root, 450, 450);
+
+        primaryStage.setTitle("Крестики‑нолики");
         primaryStage.setScene(scene);
         primaryStage.show();
     }
 
-    private void handleButtonClick(int row, int col) {
-        if (buttons[row][col].getText().isEmpty()) {
-            buttons[row][col].setText(isXTurn ? "X" : "O");
-            if (checkWin()) {
-                showWinMessage(isXTurn ? "X" : "O");
-                resetBoard();
-            } else if (checkDraw()) {
-                showDrawMessage();
-                resetBoard();
-            } else {
-                isXTurn = !isXTurn;
-            }
+// Человек
+    private void handlePlayerMove(int row, int col) {
+        if (!isXTurn || !buttons[row][col].getText().isEmpty()) {
+            // либо сейчас не очередь игрока, либо клетка занята
+            return;
         }
+
+        buttons[row][col].setText("X");
+
+        if (checkWin("X")) {
+            showWinMessage("X");
+            resetBoard();
+            return;
+        }
+
+        if (checkDraw()) {
+            showDrawMessage();
+            resetBoard();
+            return;
+        }
+
+        isXTurn = false;  
+        computerMove();
     }
 
-    private boolean checkWin() {
-        // Проверка строк
-        for (int row = 0; row < 3; row++) {
-            if (checkLine(buttons[row][0], buttons[row][1], buttons[row][2])) {
-                return true;
-            }
+// Компьютер
+    private void computerMove() {
+        int[] move = findBestMove();
+        if (move != null) {
+            buttons[move[0]][move[1]].setText("O");
         }
 
-        // Проверка столбцов
-        for (int col = 0; col < 3; col++) {
-            if (checkLine(buttons[0][col], buttons[1][col], buttons[2][col])) {
-                return true;
-            }
+        if (checkWin("O")) {
+            showWinMessage("O");
+            resetBoard();
+            return;
         }
 
-        // Проверка диагоналей
-        return checkLine(buttons[0][0], buttons[1][1], buttons[2][2]) ||
-                checkLine(buttons[0][2], buttons[1][1], buttons[2][0]);
+        if (checkDraw()) {
+            showDrawMessage();
+            resetBoard();
+            return;
+        }
+
+        isXTurn = true;   
     }
 
-    private boolean checkLine(Button b1, Button b2, Button b3) {
-        return !b1.getText().isEmpty() &&
-                b1.getText().equals(b2.getText()) &&
-                b1.getText().equals(b3.getText());
+// Анализ выгодного хода
+    private int[] findBestMove() {
+
+        int[] winMove = findCriticalMove("O");
+        if (winMove != null) return winMove;
+
+        int[] blockMove = findCriticalMove("X");
+        if (blockMove != null) return blockMove;
+
+        // Центральная часть
+        if (buttons[1][1].getText().isEmpty()) {
+            return new int[]{1, 1};
+        }
+
+        // Углы
+        int[][] corners = {{0,0},{0,2},{2,0},{2,2}};
+        List<int[]> freeCorners = new ArrayList<>();
+        for (int[] c : corners) {
+            if (buttons[c[0]][c[1]].getText().isEmpty()) freeCorners.add(c);
+        }
+        if (!freeCorners.isEmpty()) {
+            return freeCorners.get(random.nextInt(freeCorners.size()));
+        }
+
+        // Если все выгодные позиции заняты занимаем оставшуюся свободную клетку
+        List<int[]> freeCells = new ArrayList<>();
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                if (buttons[r][c].getText().isEmpty()) freeCells.add(new int[]{r,c});
+            }
+        }
+        if (freeCells.isEmpty()) return null;
+
+        return freeCells.get(random.nextInt(freeCells.size()));
+    }
+
+  // Анализ выйгришного хода
+    private int[] findCriticalMove(String symbol) {
+        // проверяем каждую пустую клетку
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                if (buttons[r][c].getText().isEmpty()) {
+                    buttons[r][c].setText(symbol);
+                    boolean isWinning = checkWin(symbol);
+                    buttons[r][c].setText(""); // откатываем
+                    if (isWinning) {
+                        return new int[]{r, c};
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+
+    private boolean checkWin(String symbol) {
+        // Проверка строк и столбцов
+        for (int i = 0; i < 3; i++) {
+            if (buttons[i][0].getText().equals(symbol) &&
+                buttons[i][1].getText().equals(symbol) &&
+                buttons[i][2].getText().equals(symbol))
+                return true;
+
+            if (buttons[0][i].getText().equals(symbol) &&
+                buttons[1][i].getText().equals(symbol) &&
+                buttons[2][i].getText().equals(symbol))
+                return true;
+        }
+
+        // Диагонали
+        if (buttons[0][0].getText().equals(symbol) &&
+            buttons[1][1].getText().equals(symbol) &&
+            buttons[2][2].getText().equals(symbol))
+            return true;
+
+        if (buttons[0][2].getText().equals(symbol) &&
+            buttons[1][1].getText().equals(symbol) &&
+            buttons[2][0].getText().equals(symbol))
+            return true;
+
+        return false;
     }
 
     private boolean checkDraw() {
@@ -120,7 +217,7 @@ public class TicTacToe extends Application {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Победа!");
         alert.setHeaderText(null);
-        alert.setContentText("Игрок " + winner + " победил!");
+        alert.setContentText("Победил игрок \"" + winner + "\"!");
         alert.showAndWait();
     }
 
